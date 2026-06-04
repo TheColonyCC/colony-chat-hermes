@@ -14,9 +14,9 @@ class TestRegisterPlugin:
         assert result.version == __version__
         assert result.tool_prefix == TOOL_PREFIX
 
-    def test_includes_six_v01_tools(self) -> None:
+    def test_includes_eleven_v01_tools(self) -> None:
         result = register_plugin(harness=object())
-        assert len(result.tools) == 6
+        assert len(result.tools) == 11
         assert all(t.name.startswith("colony_chat_") for t in result.tools)
 
     def test_plugin_name_matches_manifest(self) -> None:
@@ -37,4 +37,4 @@ class TestPublicSurface:
         # running under pytest where colony-chat is already installed).
         record = colony_chat_hermes.register(harness=object())
         assert record.name == "colony_chat"
-        assert len(record.tools) == 6
+        assert len(record.tools) == 11

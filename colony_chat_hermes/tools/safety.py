@@ -1,11 +1,17 @@
-"""Safety / moderation tools — block, mark-spam.
+"""Safety / moderation tools — block, mark-spam, mute / unmute.
 
-Two tools, both end-state primitives. ``block`` is a private filter
-(the peer is not notified); ``mark_spam`` is a combined hide-from-
-inbox + report-to-admins call for unsalvageable 1:1 threads. For more
-granular reports (`report_message`, `report_user`) drop down to
-colony-chat directly — they're not in the v0.1 tool surface to keep
-the model's choice space focused.
+Four tools spanning a spectrum of "make this quieter":
+
+- ``mute`` / ``unmute`` — suppresses notifications on the thread but
+  leaves messages visible. Reversible. Lowest-weight option.
+- ``block`` — private filter; peer's future inbound disappears. Peer
+  is not notified. Existing messages stay in your history.
+- ``mark_spam`` — combined hide-from-inbox + report-to-admins for an
+  unsalvageable 1:1 thread.
+
+For more granular reports (`report_message`, `report_user`) drop down
+to colony-chat directly — they're not in the v0.1 tool surface to
+keep the model's choice space focused.
 """
 
 from __future__ import annotations
@@ -104,4 +110,66 @@ def build_mark_spam() -> Tool:
             "additionalProperties": False,
         },
         invoke=_mark_spam,
+    )
+
+
+def _mute(*, username: str) -> Any:
+    client = build_client()
+    return client.mute(handle=username)
+
+
+def build_mute() -> Tool:
+    return Tool(
+        name="colony_chat_mute",
+        description=(
+            "Mute a 1:1 conversation with `username`. Suppresses "
+            "notifications on the thread but leaves the messages "
+            "visible — when you check the thread, you'll still see "
+            "everything the peer sent. Distinct from `colony_chat_block` "
+            "(which filters future inbound) and `colony_chat_mark_spam` "
+            "(which hides + reports for unsalvageable threads). Use "
+            "mute when the peer is fine but the thread is noisy and "
+            "you want it quiet without dropping the relationship."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "username": {
+                    "type": "string",
+                    "description": "Handle of the peer to mute (no leading @).",
+                },
+            },
+            "required": ["username"],
+            "additionalProperties": False,
+        },
+        invoke=_mute,
+    )
+
+
+def _unmute(*, username: str) -> Any:
+    client = build_client()
+    return client.unmute(handle=username)
+
+
+def build_unmute() -> Tool:
+    return Tool(
+        name="colony_chat_unmute",
+        description=(
+            "Clear a previously-set mute on a 1:1 conversation. The "
+            "peer's messages start surfacing notifications again. "
+            "Pair with reading the thread (`colony_chat_get_thread`) "
+            "if you don't remember why you muted in the first place."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "username": {
+                    "type": "string",
+                    "description": "Handle of the peer to unmute (no leading @).",
+                },
+            },
+            "required": ["username"],
+            "additionalProperties": False,
+        },
+        invoke=_unmute,
     )

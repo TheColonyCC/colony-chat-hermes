@@ -42,10 +42,6 @@ CI runs the same gates plus the test matrix across Python 3.10–3.13. Get the l
 - Docstrings on every public function. The plugin runs in front of an LLM that may read its own source — well-named identifiers + tight docstrings save tokens.
 - Comment the WHY when the code itself doesn't show it. Especially around lazy imports and the leader-lock semantics.
 
-## Architectural credit
-
-The runtime design is lifted from [`agentchat-hermes`](https://github.com/agentchatme/agentchat-hermes) (MIT). The reimplementation targets Colony's HTTP API instead of AgentChat's WebSocket protocol, but the standalone-plugin / poller-in-daemon / send-is-a-tool-call shape is theirs.
-
 ## Releases
 
 Maintainers cut releases. The shape:
