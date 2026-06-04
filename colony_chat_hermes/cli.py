@@ -330,6 +330,46 @@ def _cmd_send(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    from colony_chat_hermes.doctor import run_doctor
+
+    return run_doctor(
+        env_path=Path(args.env_path),
+        soul_path=Path(args.soul_path),
+        lock_path=Path(args.lock_path),
+        invoker_spec=args.invoker,
+        emit=print,
+    )
+
+
+def _cmd_webhook_setup(args: argparse.Namespace) -> int:
+    from colony_chat_hermes.webhook_cli import cmd_setup
+
+    events = [e.strip() for e in args.events.split(",") if e.strip()]
+    rc, msg = cmd_setup(url=args.url, env_path=Path(args.env_path), events=events)
+    out = sys.stdout if rc == 0 else sys.stderr
+    print(msg, file=out)
+    return rc
+
+
+def _cmd_webhook_list(args: argparse.Namespace) -> int:
+    from colony_chat_hermes.webhook_cli import cmd_list
+
+    rc, msg = cmd_list(env_path=Path(args.env_path))
+    out = sys.stdout if rc == 0 else sys.stderr
+    print(msg, file=out)
+    return rc
+
+
+def _cmd_webhook_delete(args: argparse.Namespace) -> int:
+    from colony_chat_hermes.webhook_cli import cmd_delete
+
+    rc, msg = cmd_delete(webhook_id=args.webhook_id, env_path=Path(args.env_path))
+    out = sys.stdout if rc == 0 else sys.stderr
+    print(msg, file=out)
+    return rc
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="colony-chat-hermes",
@@ -486,6 +526,45 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Idempotency key (server-side dedup on retry).",
     )
     p_send.set_defaults(func=_cmd_send)
+
+    p_doctor = sub.add_parser(
+        "doctor",
+        help="Diagnostic checklist for first-run setup (read-only).",
+    )
+    p_doctor.add_argument("--env-path", default=default_env)
+    p_doctor.add_argument("--soul-path", default=default_soul)
+    p_doctor.add_argument("--lock-path", default=default_lock)
+    p_doctor.add_argument(
+        "--invoker",
+        default=os.environ.get("COLONY_CHAT_INVOKER", "log_only"),
+        help="Invoker spec to validate (resolves but doesn't dispatch).",
+    )
+    p_doctor.set_defaults(func=_cmd_doctor)
+
+    p_webhook = sub.add_parser(
+        "webhook",
+        help="Manage Mode A webhook subscriptions (setup / list / delete).",
+    )
+    webhook_sub = p_webhook.add_subparsers(dest="webhook_command", required=True)
+
+    p_setup = webhook_sub.add_parser("setup", help="Subscribe a webhook + persist creds to .env.")
+    p_setup.add_argument("--env-path", default=default_env)
+    p_setup.add_argument("--url", required=True, help="Public HTTPS URL Colony delivers to.")
+    p_setup.add_argument(
+        "--events",
+        default="direct_message",
+        help="Comma-separated event types (default: direct_message).",
+    )
+    p_setup.set_defaults(func=_cmd_webhook_setup)
+
+    p_wlist = webhook_sub.add_parser("list", help="List your registered webhooks.")
+    p_wlist.add_argument("--env-path", default=default_env)
+    p_wlist.set_defaults(func=_cmd_webhook_list)
+
+    p_wdel = webhook_sub.add_parser("delete", help="Delete a webhook by id.")
+    p_wdel.add_argument("--env-path", default=default_env)
+    p_wdel.add_argument("webhook_id", help="Webhook id (from `webhook list`).")
+    p_wdel.set_defaults(func=_cmd_webhook_delete)
 
     return parser
 

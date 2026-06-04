@@ -24,10 +24,11 @@ from colony_chat_hermes.daemon.message_queue import MessageQueue
 
 def _evt(mid: str = "m1") -> InboundEvent:
     return InboundEvent(
-        message_id=mid,
-        conversation_id="c1",
+        notification_id=mid,
         from_handle="alice",
+        from_display="Alice",
         body="hi",
+        conversation_id="c1",
         ts="2026-06-04T12:00:00Z",
         source="poller",
     )
@@ -44,8 +45,8 @@ class TestLogOnly:
         invoker(_evt("m2"))
         lines = target.read_text().splitlines()
         assert len(lines) == 2
-        assert json.loads(lines[0])["message_id"] == "m1"
-        assert json.loads(lines[1])["message_id"] == "m2"
+        assert json.loads(lines[0])["notification_id"] == "m1"
+        assert json.loads(lines[1])["notification_id"] == "m2"
 
     def test_creates_parent_directory(self, tmp_path: Path) -> None:
         target = tmp_path / "nested" / "tree" / "inbound.jsonl"
@@ -73,7 +74,7 @@ class TestSubprocess:
         )
         invoker(_evt("m1"))
         recorded = json.loads(captured.read_text())
-        assert recorded["message_id"] == "m1"
+        assert recorded["notification_id"] == "m1"
 
     def test_logs_on_nonzero_exit(self, caplog: pytest.LogCaptureFixture) -> None:
         invoker = subprocess_invoker(command=[sys.executable, "-c", "import sys; sys.exit(2)"])
@@ -133,7 +134,7 @@ class TestLoadInvoker:
         )
         invoker = load_invoker(spec)
         invoker(_evt("m1"))
-        assert json.loads(target.read_text())["message_id"] == "m1"
+        assert json.loads(target.read_text())["notification_id"] == "m1"
 
     def test_dotted_callable(self, monkeypatch: pytest.MonkeyPatch) -> None:
         called: list[InboundEvent] = []
@@ -151,7 +152,7 @@ class TestLoadInvoker:
         invoker = load_invoker("test_dotted_module:factory")
         invoker(_evt("m1"))
         assert len(called) == 1
-        assert called[0].message_id == "m1"
+        assert called[0].notification_id == "m1"
 
     def test_dotted_callable_rejects_non_callable_attr(
         self, monkeypatch: pytest.MonkeyPatch
@@ -195,7 +196,7 @@ class TestAgentInvoker:
             deadline = time.time() + 2.0
             while len(captured) < 2 and time.time() < deadline:
                 time.sleep(0.02)
-            assert [e.message_id for e in captured] == ["m1", "m2"]
+            assert [e.notification_id for e in captured] == ["m1", "m2"]
         finally:
             consumer.stop(timeout=2.0)
         assert consumer.stats()["dispatched"] == 2
@@ -206,7 +207,7 @@ class TestAgentInvoker:
 
         def _invoker(e: InboundEvent) -> None:
             attempts.append(e)
-            if e.message_id == "m1":
+            if e.notification_id == "m1":
                 raise RuntimeError("boom")
 
         consumer = AgentInvoker(message_queue=q, invoker=_invoker, dequeue_timeout=0.05)
@@ -217,7 +218,7 @@ class TestAgentInvoker:
             deadline = time.time() + 2.0
             while len(attempts) < 2 and time.time() < deadline:
                 time.sleep(0.02)
-            assert [e.message_id for e in attempts] == ["m1", "m2"]
+            assert [e.notification_id for e in attempts] == ["m1", "m2"]
         finally:
             consumer.stop(timeout=2.0)
         assert consumer.stats()["dispatched"] == 1

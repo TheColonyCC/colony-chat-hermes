@@ -89,7 +89,7 @@ class TestLifecycle:
             while not dispatched and time.time() < deadline:
                 time.sleep(0.02)
             assert len(dispatched) == 1
-            assert dispatched[0].message_id == "m1"
+            assert dispatched[0].notification_id == "m1"
         finally:
             orch.stop()
 

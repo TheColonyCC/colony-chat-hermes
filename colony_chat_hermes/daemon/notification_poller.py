@@ -10,6 +10,24 @@ owned by the orchestrator. It loops until ``stop_event`` is set, sleeps
 between polls via ``Event.wait`` so a stop interrupts the sleep
 immediately, and silences network errors at the loop level so a
 transient outage doesn't kill the daemon.
+
+Per-poll surface
+----------------
+
+Each iteration makes up to two API calls:
+
+1. ``client.unread()`` — server-tracked unread DM notifications.
+   Server marks them read on the *agent's* side via subsequent reads
+   from the conversation, so the dedup window we keep here is a
+   belt-and-braces against duplicate Mode A + Mode B delivery.
+
+2. ``client.contacts()`` (only when there ARE unread) — used to
+   build a display-name → username map and a username →
+   conversation-id map so we can enrich each notification with the
+   structured peer fields the notifications endpoint doesn't surface.
+
+When ``unread()`` returns nothing, we skip the ``contacts()`` call.
+This is the steady-state hot path; one HTTP request per idle poll.
 """
 
 from __future__ import annotations
@@ -25,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 class NotificationPoller:
-    """Polls ``client.unread()`` and enqueues new direct_message events."""
+    """Polls ``client.unread()`` + enriches via ``client.contacts()``."""
 
     def __init__(
         self,
@@ -62,6 +80,40 @@ class NotificationPoller:
         if self._thread is not None:
             self._thread.join(timeout=timeout)
 
+    def _enrichment_maps(self) -> tuple[dict[str, str], dict[str, str]]:
+        """Build display→username + username→conv_id maps from contacts().
+
+        Returns empty maps on failure so the caller can still emit
+        events with from_handle / conversation_id unresolved (we'd
+        rather deliver an event with empty enrichment fields than
+        drop it entirely).
+        """
+        try:
+            convs = self._client.contacts()
+        except Exception as e:
+            logger.warning(
+                "colony-chat-poller: contacts() failed: %s: %s",
+                type(e).__name__,
+                e,
+            )
+            return {}, {}
+        display_to_handle: dict[str, str] = {}
+        handle_to_conv: dict[str, str] = {}
+        for cv in convs or []:
+            if not isinstance(cv, dict):
+                continue
+            peer = cv.get("other_user")
+            if not isinstance(peer, dict):
+                continue
+            username = peer.get("username")
+            display = peer.get("display_name")
+            conv_id = cv.get("id")
+            if username and display:
+                display_to_handle[str(display)] = str(username)
+            if username and conv_id:
+                handle_to_conv[str(username)] = str(conv_id)
+        return display_to_handle, handle_to_conv
+
     def poll_once(self) -> int:
         """Run a single poll iteration. Returns count enqueued.
 
@@ -74,14 +126,25 @@ class NotificationPoller:
             items = self._client.unread(limit=self._limit)
         except Exception as e:
             # Don't crash the loop on transient failures — log and move
-            # on. The next iteration will retry. If the failure is
-            # persistent (revoked key, host down) the operator will
-            # see it in the logs.
-            logger.warning("colony-chat-poller: unread() failed: %s: %s", type(e).__name__, e)
+            # on. The next iteration will retry.
+            logger.warning(
+                "colony-chat-poller: unread() failed: %s: %s",
+                type(e).__name__,
+                e,
+            )
             return 0
+        items = items or []
+        if not items:
+            return 0
+        display_to_handle, handle_to_conv = self._enrichment_maps()
         n = 0
-        for item in items or []:
-            event = InboundEvent.from_notification(item, source="poller")
+        for item in items:
+            event = InboundEvent.from_notification(
+                item,
+                source="poller",
+                display_to_handle=display_to_handle,
+                handle_to_conv_id=handle_to_conv,
+            )
             if event is not None and self._queue.enqueue(event):
                 n += 1
         self._enqueued += n

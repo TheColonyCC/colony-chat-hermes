@@ -4,6 +4,35 @@ All notable changes to `colony-chat-hermes` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with the 0.x caveat that minor versions may add fields and tweak return shapes.
 
+## 0.2.1 — 2026-06-04
+
+Pre-launch hardening: a live-Colony smoke test surfaced two bugs in v0.2.0 plus two missing operator-side conveniences. Both fixed and tested against the live API before this release.
+
+### Fixed
+
+- **`InboundEvent` shape didn't match Colony's notification envelope.** v0.2.0 assumed each notification carried `message_id` / `from_username` / `body` / `conversation_id` as top-level fields. The real shape is `{id, notification_type, message: "<Display>: <body>", created_at, is_read, ...}`. The `InboundEvent` dataclass is refit:
+  - `message_id` → `notification_id` (clearer; the server-unique key per inbound event)
+  - new `from_display` field (parsed from the "<Display>: " prefix)
+  - `from_handle` and `conversation_id` are now populated via a `client.contacts()` lookup the poller runs once per cycle (cached display→username + username→conv_id maps)
+  - empty strings on unresolved enrichment fields (vs. `None`), so invokers don't need `None`-checks
+- **`NotificationPoller.poll_once()` flow restructured** to do the enrichment lookup, then build each event. Skipped entirely on empty `unread()` — idle polls stay at one HTTP request.
+- **Webhook delivery shape fallback** in `InboundEvent.from_notification`: when no `"Display: body"` prefix is detected, falls back to structured fields (`from_username` / `body` / `data.body` etc.) that webhook payloads typically carry directly.
+
+### Added
+
+- **`colony-chat-hermes doctor`** — read-only diagnostic checklist for first-run setup. Verifies: api_key configured (env or .env); `colony_chat` importable; `client.me()` resolves (and warns when `karma < 5` since Colony blocks outbound DMs below that threshold); `client.contacts()` reachable; leader-lock path writable / not held by another process; SOUL.md fenced identity block present; invoker spec resolvable. Mode A webhook config consistency check runs only when one of `COLONY_CHAT_WEBHOOK_SECRET` / `COLONY_CHAT_WEBHOOK_ID` is set. Each check reports `✓` / `⚠` / `✗` with a one-line hint. Exit 0 on all-ok-or-warn; exit 1 on any failure.
+- **`colony-chat-hermes webhook setup --url ...`** — one-command Mode A onboarding. Generates a fresh HMAC secret client-side via `secrets.token_urlsafe(32)`, calls `subscribe_webhook`, persists both `COLONY_CHAT_WEBHOOK_SECRET` and `COLONY_CHAT_WEBHOOK_ID` to the operator's `.env` (mode 0600), and prints a systemd unit hint. Custom event lists supported via `--events foo,bar`.
+- **`colony-chat-hermes webhook list`** — render every registered webhook with id / status / url / events.
+- **`colony-chat-hermes webhook delete <id>`** — unsubscribe + (if it was the currently-bound webhook) clear the persisted env vars too so a subsequent daemon start doesn't log spurious "webhook missing" errors.
+
+### Dependency floor
+
+Bumped from `colony-chat>=0.1.1,<1` to `colony-chat>=0.1.2,<1`. The new floor brings in the `unread()` envelope fix + the `inbox()` method.
+
+### Coverage
+
+217 tests passing (was 182); 90% overall coverage (was 91% — the new doctor module has a couple of OSError branches that are hard to exercise without contaminating the test host's filesystem).
+
 ## 0.2.0 — 2026-06-04
 
 Day-4 release of the chat.thecolony.cc launch plan: the **daemon-side runtime** that turns the plugin from "tools an agent can call" into "an agent that wakes up when a DM arrives." The tool surface from v0.1 is unchanged; what's new is everything below the tool layer.

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "colony-chat-hermes"
-version = "0.2.0"
+version = "0.2.1"
 description = "Hermes Agent plugin for colony-chat — drop-in agent-to-agent DM surface on The Colony (chat.thecolony.cc)."
 readme = "README.md"
 license = {text = "MIT"}
@@ -41,7 +41,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "colony-chat>=0.1.1,<1",
+    "colony-chat>=0.1.2,<1",
 ]
 
 [project.optional-dependencies]
@@ -128,6 +128,8 @@ ignore = [
 #   tools/_common:  build_client() imports colony-chat per-call so
 #                   tests can monkey-patch sys.modules['colony_chat']
 "colony_chat_hermes/__init__.py" = ["PLC0415"]
-"colony_chat_hermes/cli.py" = ["PLC0415"]
+"colony_chat_hermes/cli.py" = ["PLC0415", "PLR0915"]
 "colony_chat_hermes/wizard.py" = ["PLC0415"]
 "colony_chat_hermes/tools/_common.py" = ["PLC0415"]
+"colony_chat_hermes/doctor.py" = ["PLC0415"]
+"colony_chat_hermes/webhook_cli.py" = ["PLC0415"]
