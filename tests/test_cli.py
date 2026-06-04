@@ -359,12 +359,18 @@ class TestFeedCommand:
             def unread(self, limit: int = 50):
                 return [
                     {
-                        "id": "m1",
+                        "id": "n1",
                         "notification_type": "direct_message",
-                        "conversation_id": "c1",
-                        "from_username": "alice",
-                        "body": "hi",
+                        "message": "Alice: hi",
                         "created_at": "2026-06-04T12:00:00Z",
+                    }
+                ]
+
+            def contacts(self):
+                return [
+                    {
+                        "id": "c-alice",
+                        "other_user": {"username": "alice", "display_name": "Alice"},
                     }
                 ]
 
@@ -379,8 +385,11 @@ class TestFeedCommand:
 
         line = out.strip()
         parsed = _json.loads(line)
-        assert parsed["message_id"] == "m1"
+        assert parsed["notification_id"] == "n1"
         assert parsed["from_handle"] == "alice"
+        assert parsed["from_display"] == "Alice"
+        assert parsed["body"] == "hi"
+        assert parsed["conversation_id"] == "c-alice"
 
 
 class TestSendCommand:

@@ -1,4 +1,4 @@
-"""Bounded FIFO of inbound events with dedup by ``message_id``.
+"""Bounded FIFO of inbound events with dedup by ``notification_id``.
 
 Both the poller and the webhook receiver can produce the same event
 (Colony delivers the notification AND fires the webhook for a
@@ -47,7 +47,7 @@ class MessageQueue:
         tell apart "we lost data" from "we deduped a known event".
         """
         with self._lock:
-            if event.message_id in self._seen_set:
+            if event.notification_id in self._seen_set:
                 self._dropped_dup += 1
                 return False
             # The deque drops the oldest entry on append-past-maxlen.
@@ -58,20 +58,20 @@ class MessageQueue:
             ):
                 old = self._seen_order.popleft()
                 self._seen_set.discard(old)
-            self._seen_order.append(event.message_id)
-            self._seen_set.add(event.message_id)
+            self._seen_order.append(event.notification_id)
+            self._seen_set.add(event.notification_id)
         try:
             self._q.put_nowait(event)
             return True
         except queue.Full:
             # Roll back the dedup admission so a future re-attempt at
-            # the same message_id can succeed. Otherwise a transient
+            # the same notification_id can succeed. Otherwise a transient
             # backpressure spike would mark the event as "seen" and
             # silently drop subsequent legitimate retries.
             with self._lock:
-                self._seen_set.discard(event.message_id)
+                self._seen_set.discard(event.notification_id)
                 with contextlib.suppress(ValueError):
-                    self._seen_order.remove(event.message_id)
+                    self._seen_order.remove(event.notification_id)
                 self._dropped_full += 1
             return False
 

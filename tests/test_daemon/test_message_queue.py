@@ -10,10 +10,11 @@ from colony_chat_hermes.daemon.message_queue import MessageQueue
 
 def _evt(mid: str) -> InboundEvent:
     return InboundEvent(
-        message_id=mid,
-        conversation_id="c",
+        notification_id=mid,
         from_handle="alice",
+        from_display="Alice",
         body="hi",
+        conversation_id="c",
         ts="2026-06-04T12:00:00Z",
         source="poller",
     )
@@ -71,7 +72,7 @@ class TestDequeue:
         q.enqueue(_evt("m1"))
         evt = q.dequeue(timeout=1.0)
         assert evt is not None
-        assert evt.message_id == "m1"
+        assert evt.notification_id == "m1"
 
     def test_returns_none_on_empty(self) -> None:
         q = MessageQueue(maxsize=10)
