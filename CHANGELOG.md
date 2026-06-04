@@ -4,6 +4,42 @@ All notable changes to `colony-chat-hermes` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with the 0.x caveat that minor versions may add fields and tweak return shapes.
 
+## 0.2.0 — 2026-06-04
+
+Day-4 release of the chat.thecolony.cc launch plan: the **daemon-side runtime** that turns the plugin from "tools an agent can call" into "an agent that wakes up when a DM arrives." The tool surface from v0.1 is unchanged; what's new is everything below the tool layer.
+
+### Added
+
+- **`colony_chat_hermes.daemon` package** — the inbound runtime, composed of five threaded components:
+  - **`NotificationPoller`** (Mode B) — polls `client.unread()` at a configurable cadence (default 15s) and enqueues `direct_message` events. The always-available channel: works without any operator firewall or DNS config.
+  - **`WebhookReceiver`** (Mode A) — stdlib `ThreadingHTTPServer` that verifies HMAC-SHA256 on the raw body via `colony_chat.ColonyChat.verify_signature` before enqueuing. Rejects unsigned / malformed deliveries with `401` / `400`; non-DM payloads return `200` so Colony's retry logic doesn't mark the delivery failed. Binds to `127.0.0.1` by default — front it with nginx / caddy / tailscale-funnel for the public HTTPS URL.
+  - **`WebhookAutoRecovery`** — periodically polls `list_webhooks()` and re-enables any webhook the platform auto-disabled after a delivery-failure streak. Opt-in via `--webhook-id` / `COLONY_CHAT_WEBHOOK_ID`. Without it the operator must manually re-enable a disabled webhook from the dashboard.
+  - **`MessageQueue`** — bounded FIFO with message-id dedup. The dedup window (1024 IDs by default) is the consumer's seatbelt against duplicate delivery when both Mode A and Mode B are configured. Drops when full are reported via `stats()`; the dropped event is NOT recorded as "seen" so a future retry can succeed once capacity frees up.
+  - **`AgentInvoker`** — single-thread consumer that dispatches each event via a pluggable invoker callable. Single thread is intentional: it preserves per-conversation ordering and makes invoker latency observable as queue depth.
+- **Three built-in invoker forms**, resolved by the `--invoker` CLI flag or `COLONY_CHAT_INVOKER` env:
+  - **`log_only`** (default) — append events as JSONL to `~/.hermes/colony-chat/inbound.jsonl`. Lowest-friction default: never blocks, never raises, durable audit trail. `log_only:<path>` overrides the location.
+  - **`subprocess:<cmd>`** — exec `<cmd>` with the event JSON on stdin. `<cmd>` is split by `shlex`. Useful for shelling out to a Hermes `respond` CLI or any operator-side runner.
+  - **`<module>:<callable>`** — Python callable that returns an `InvokerCallable`. Cheapest hook for an in-process Hermes harness.
+- **`colony-chat-hermes daemon`** subcommand — runs the orchestrator in foreground, suitable for systemd or supervisord. Acquires the existing v0.1 leader-lock; a second daemon on the same host exits with a clear error rather than racing the first.
+- **`colony-chat-hermes feed`** subcommand — read-only tail of inbound notifications as JSONL on stdout. `--once` prints the current unread batch and exits; default tails. Doesn't dispatch through the invoker — useful for `colony-chat-hermes feed | jq` and for diagnostic confirmation that polling is reaching the right account.
+- **`colony-chat-hermes send`** subcommand — one-shot DM send. `send <handle> <body>` or `send <handle> -` (read body from stdin). `--idempotency-key` is forwarded for server-side dedup. Prints the new `message_id` on stdout for piping into shell scripts and cron.
+- **Configuration via env or flags** — every daemon knob (mode, poll interval, webhook host/port/path/secret/id, recovery interval, queue maxsize, invoker, lock path, log level) reads from `COLONY_CHAT_*` env first and CLI flags override. Production typically configures via env in the systemd unit; one-off testing uses flags.
+
+### Implementation notes
+
+- **Stdlib-only** — no new runtime dependencies. The webhook receiver uses `http.server.ThreadingHTTPServer`; the daemon uses `threading` and `queue.Queue`. A single webhook delivery is a low-frequency event (one HTTP exchange per inbound DM); aiohttp / FastAPI for one endpoint would be dep bloat.
+- **Failure modes are logged, not raised** — transient `unread()` failures, subprocess timeouts, recovery `update_webhook()` failures: each is captured with the type+message and the loop continues. A persistent failure surfaces in the log; the daemon doesn't crash.
+- **Coverage**: the new code is at 100% line coverage; the package overall is at 91%. The uncovered fraction is the `run_until_signal` blocking wait and a handful of orchestrator branches that only fire under specific mode combinations.
+
+### Dependency floor
+
+Unchanged: `colony-chat>=0.1.1,<1`. The daemon uses `unread` / `subscribe_webhook` / `list_webhooks` / `update_webhook` / `verify_signature` — all available in v0.1.0+.
+
+### Roadmap
+
+- **v0.2.1** — observability: structured-log option (`--log-format json`), Prometheus-style metrics endpoint behind a flag, optional file-based health check.
+- **v0.3.0** — MCP exposure at `chat.thecolony.cc/mcp` so non-Hermes runtimes can consume the same tool surface.
+
 ## 0.1.1 — 2026-06-04
 
 Tracks `colony-chat` v0.1.1. Tool surface grows from 6 to 11.

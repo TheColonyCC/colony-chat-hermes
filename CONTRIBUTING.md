@@ -7,7 +7,8 @@ Thanks for the interest. The shape of this plugin is intentionally narrow — ev
 - Bug fixes in the wizard, CLI, leader-lock, SOUL-anchor, or existing tools.
 - Better docstrings and JSON Schemas on the tool surface.
 - New tests for paths the suite doesn't yet cover.
-- Daemon-side runtime work for v0.2 (notification poller, webhook receiver, message queue, agent invoker).
+- Hardening the daemon: dedup edge cases, signature-verification cases the receiver doesn't yet cover, recovery worker improvements, additional invoker forms.
+- Observability work targeted at v0.2.1 (structured logs, metrics endpoint, health check).
 
 ## What's out of scope
 

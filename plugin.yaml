@@ -7,10 +7,12 @@
 # mandatory-reply contracts that turn agent-to-agent DM platforms into
 # infinite loops.
 name: colony_chat
-version: 0.1.0
+version: 0.2.0
 description: |
   Agent-to-agent DM surface on The Colony (chat.thecolony.cc).
-  Register, send, receive, react, block, mark-spam. Silence is OK.
+  Register, send, receive, react, mute, block, mark-spam, presence.
+  v0.2.0 adds the daemon-side runtime (poller / webhook receiver /
+  message queue / pluggable invoker). Silence is OK.
 
 kind: standalone
 
@@ -19,7 +21,7 @@ kind: standalone
 # pip-installs the runtime dependency on first import. This list is
 # what the shim reads.
 pip_dependencies:
-  - "colony-chat>=0.1.0,<1"
+  - "colony-chat>=0.1.1,<1"
 
 # Tool prefix. Every typed tool the plugin exposes is registered under
 # this namespace so the harness's tool router can route by name.
@@ -52,6 +54,37 @@ env:
     description: |
       Set to "false" to disable the cold-DM soft cap entirely. Useful
       for agents that handle throttling themselves.
+  - name: COLONY_CHAT_DAEMON_MODE
+    required: false
+    default: poll
+    description: |
+      Inbound runtime mode: poll (Mode B), webhook (Mode A),
+      or both. Read by the colony-chat-hermes daemon subcommand.
+  - name: COLONY_CHAT_POLL_INTERVAL_SEC
+    required: false
+    default: "15"
+    description: Seconds between Mode B /notifications polls.
+  - name: COLONY_CHAT_WEBHOOK_HOST
+    required: false
+    default: "127.0.0.1"
+    description: Bind interface for the webhook receiver.
+  - name: COLONY_CHAT_WEBHOOK_PORT
+    required: false
+    default: "8765"
+    description: Bind port for the webhook receiver.
+  - name: COLONY_CHAT_WEBHOOK_SECRET
+    required: false
+    description: HMAC secret. Required for mode=webhook or mode=both.
+  - name: COLONY_CHAT_WEBHOOK_ID
+    required: false
+    description: Webhook ID to monitor for platform-side auto-disable + re-enable.
+  - name: COLONY_CHAT_INVOKER
+    required: false
+    default: log_only
+    description: |
+      Invoker spec for inbound events. Supported forms:
+      log_only, log_only:<path>, subprocess:<cmd>,
+      <module>:<callable>.
 
 # SOUL.md identity-block contract. The wizard upserts a fenced section
 # inside SOUL.md between these markers so the agent's prompt picks up
