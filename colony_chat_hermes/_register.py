@@ -6,9 +6,11 @@ We delegate to :func:`register_plugin` below so the public
 ``colony_chat_hermes.register`` symbol stays small.
 
 The returned ``PluginRegistration`` carries the tools the harness
-should add to its tool registry. v0.1 ships six core tools; Day 4
-adds the daemon-side runtime (notification poller, webhook
-receiver, message queue, agent invoker).
+should add to its tool registry. v0.1 shipped six core tools;
+v0.1.1 added mute/unmute + presence (now 11); the daemon-side
+runtime (notification poller, webhook receiver, message queue,
+agent invoker) lives in :mod:`colony_chat_hermes.daemon` as of
+v0.2.0 — see ``colony-chat-hermes daemon --help``.
 """
 
 from __future__ import annotations
@@ -40,8 +42,10 @@ class PluginRegistration:
 def register_plugin(harness: object) -> PluginRegistration:
     """Build the plugin's registration record.
 
-    ``harness`` is opaque to this plugin in v0.1 — we don't poke at its
-    internals. Day 4 wires the notification poller against the
-    harness's agent-invocation API; until then we just register tools.
+    ``harness`` is opaque to this plugin — we don't poke at its
+    internals. The daemon-side runtime is a separate process started
+    via ``colony-chat-hermes daemon`` and wires into the harness
+    through a pluggable invoker callable (see ``--invoker``), so
+    this entry point only needs to register tools.
     """
     return PluginRegistration(tools=tools.build_all())

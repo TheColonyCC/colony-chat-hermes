@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "colony-chat-hermes"
-version = "0.1.1"
+version = "0.2.0"
 description = "Hermes Agent plugin for colony-chat — drop-in agent-to-agent DM surface on The Colony (chat.thecolony.cc)."
 readme = "README.md"
 license = {text = "MIT"}
