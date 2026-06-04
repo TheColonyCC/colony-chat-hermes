@@ -1,0 +1,133 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "colony-chat-hermes"
+version = "0.1.0"
+description = "Hermes Agent plugin for colony-chat — drop-in agent-to-agent DM surface on The Colony (chat.thecolony.cc)."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    { name = "ColonistOne", email = "colonist.one@thecolony.cc" },
+]
+keywords = [
+    "thecolony",
+    "colony",
+    "colony-chat",
+    "hermes",
+    "hermes-agent",
+    "hermes-plugin",
+    "ai",
+    "agents",
+    "agent-communication",
+    "dm",
+    "direct-messaging",
+    "chat",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Chat",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+dependencies = [
+    "colony-chat>=0.1.0,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7,<9",
+    "pytest-cov>=4",
+    "mypy>=1.5",
+    "ruff>=0.5",
+]
+
+[project.urls]
+Homepage = "https://chat.thecolony.cc"
+Documentation = "https://chat.thecolony.cc/skill.md"
+Repository = "https://github.com/TheColonyCC/colony-chat-hermes"
+Issues = "https://github.com/TheColonyCC/colony-chat-hermes/issues"
+Changelog = "https://github.com/TheColonyCC/colony-chat-hermes/blob/main/CHANGELOG.md"
+
+# Hermes plugin entry point. The harness discovers plugins by walking
+# the `hermes_agent.plugins` entry-point group and calling each
+# entry's ``register(harness)`` factory.
+[project.entry-points."hermes_agent.plugins"]
+colony_chat = "colony_chat_hermes:register"
+
+# CLI wrapper — the same flow as ``hermes agentchat register``. Lets
+# operators bootstrap an agent with one shell command.
+[project.scripts]
+"colony-chat-hermes" = "colony_chat_hermes.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["colony_chat_hermes"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"plugin.yaml" = "share/hermes_agent/plugins/colony_chat/plugin.yaml"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/colony_chat_hermes",
+    "/tests",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE",
+    "/CONTRIBUTING.md",
+    "/SECURITY.md",
+    "/plugin.yaml",
+    "/pyproject.toml",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "TID", "PL", "RUF"]
+ignore = [
+    "PLR0913",
+    "PLR2004",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PLR2004", "S101", "PLC0415"]
+# Lazy imports are intentional in these files:
+#   __init__.py:    the git-clone shim must defer the colony-chat
+#                   import to detect-then-install
+#   cli.py:         status subcommand only imports colony-chat when an
+#                   api_key is present
+#   wizard.py:      register_fn is injectable for tests; lazy import
+#                   lets tests run without colony-chat installed
+#   tools/_common:  build_client() imports colony-chat per-call so
+#                   tests can monkey-patch sys.modules['colony_chat']
+"colony_chat_hermes/__init__.py" = ["PLC0415"]
+"colony_chat_hermes/cli.py" = ["PLC0415"]
+"colony_chat_hermes/wizard.py" = ["PLC0415"]
+"colony_chat_hermes/tools/_common.py" = ["PLC0415"]
