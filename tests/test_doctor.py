@@ -11,13 +11,37 @@ import pytest
 
 from colony_chat_hermes import cli, doctor, soul_anchor
 
+_DEFAULT_COLD_BUDGET = {
+    "tier": "L2",
+    "tier_label": "Established",
+    "daily": {
+        "cap": 25,
+        "remaining": 17,
+        "window_seconds": 86400,
+        "earliest_send_in_window_at": None,
+    },
+    "hourly": {
+        "cap": 10,
+        "remaining": 6,
+        "window_seconds": 3600,
+        "earliest_send_in_window_at": None,
+    },
+    "inbox_mode": "open",
+    "inbox_quiet_min_karma": None,
+    "next_tier": {"tier": "L3", "requires": {"karma": 50, "account_age_days": 30}},
+}
+
 
 def _install_fake_colony_chat(monkeypatch: pytest.MonkeyPatch, **methods: object) -> MagicMock:
     """Install a ``colony_chat`` module whose ``ColonyChat()`` returns a MagicMock.
 
     The returned mock can be customized via ``methods`` kwargs (e.g.
-    ``me=...`` to set the return value of ``client.me()``).
+    ``me=...`` to set the return value of ``client.me()``). Methods
+    not overridden get sensible defaults — ``cold_dm_budget`` returns
+    a tier-L2 happy-path budget so the doctor's cold-budget check
+    doesn't trip on tests that aren't exercising it.
     """
+    methods.setdefault("cold_dm_budget", _DEFAULT_COLD_BUDGET)
     fake_client = MagicMock()
     for k, v in methods.items():
         if isinstance(v, Exception):
@@ -163,6 +187,167 @@ class TestContactsCheck:
         )
         assert rc == 1
         assert "server down" in "\n".join(captured)
+
+
+class TestColdBudgetCheck:
+    """Tests for the v0.2.2 server-truth cold-DM budget check."""
+
+    def test_ok_when_under_caps(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        env, soul, lock = _all_paths(tmp_path)
+        monkeypatch.setenv(cli.API_KEY_ENV_VAR, "col_test")
+        _install_fake_colony_chat(
+            monkeypatch,
+            me={"username": "alice", "karma": 10},
+            contacts=[],
+            # Default tier-L2 budget is under caps → STATUS_OK.
+        )
+        captured: list[str] = []
+        rc = doctor.run_doctor(
+            env_path=env,
+            soul_path=soul,
+            lock_path=lock,
+            invoker_spec="log_only",
+            emit=captured.append,
+        )
+        assert rc == 0
+        full = "\n".join(captured)
+        assert "cold-DM budget (server)" in full
+        assert "tier=L2 (Established)" in full
+        assert "daily 17/25" in full
+        assert "hourly 6/10" in full
+        assert "inbox_mode=open" in full
+
+    def test_warns_on_l0_probation(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        env, soul, lock = _all_paths(tmp_path)
+        monkeypatch.setenv(cli.API_KEY_ENV_VAR, "col_test")
+        _install_fake_colony_chat(
+            monkeypatch,
+            me={"username": "alice", "karma": -2},
+            contacts=[],
+            cold_dm_budget={
+                "tier": "L0",
+                "tier_label": "Probation",
+                "daily": {
+                    "cap": 3,
+                    "remaining": 3,
+                    "window_seconds": 86400,
+                    "earliest_send_in_window_at": None,
+                },
+                "hourly": {
+                    "cap": 3,
+                    "remaining": 3,
+                    "window_seconds": 3600,
+                    "earliest_send_in_window_at": None,
+                },
+                "inbox_mode": "open",
+                "inbox_quiet_min_karma": None,
+                "next_tier": {"tier": "L1", "requires": {"karma": 0}},
+            },
+        )
+        captured: list[str] = []
+        doctor.run_doctor(
+            env_path=env,
+            soul_path=soul,
+            lock_path=lock,
+            invoker_spec="log_only",
+            emit=captured.append,
+        )
+        full = "\n".join(captured)
+        assert "⚠ cold-DM budget" in full
+        assert "L0" in full and "Probation" in full
+
+    def test_warns_when_daily_exhausted(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        env, soul, lock = _all_paths(tmp_path)
+        monkeypatch.setenv(cli.API_KEY_ENV_VAR, "col_test")
+        _install_fake_colony_chat(
+            monkeypatch,
+            me={"username": "alice", "karma": 75},
+            contacts=[],
+            cold_dm_budget={
+                "tier": "L3",
+                "tier_label": "Trusted",
+                "daily": {
+                    "cap": 50,
+                    "remaining": 0,
+                    "window_seconds": 86400,
+                    "earliest_send_in_window_at": "2026-06-04T14:30:00Z",
+                },
+                "hourly": {
+                    "cap": 10,
+                    "remaining": 4,
+                    "window_seconds": 3600,
+                    "earliest_send_in_window_at": "2026-06-05T08:00:00Z",
+                },
+                "inbox_mode": "open",
+                "inbox_quiet_min_karma": None,
+                "next_tier": None,
+            },
+        )
+        captured: list[str] = []
+        doctor.run_doctor(
+            env_path=env,
+            soul_path=soul,
+            lock_path=lock,
+            invoker_spec="log_only",
+            emit=captured.append,
+        )
+        full = "\n".join(captured)
+        assert "⚠ cold-DM budget" in full
+        assert "daily cold-DM cap exhausted" in full
+
+    def test_fails_when_endpoint_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Phase 1 endpoint raising counts as FAIL — could be revoked
+        # api_key, transient outage, or the server hasn't deployed
+        # Phase 1 yet on a self-hosted instance.
+        env, soul, lock = _all_paths(tmp_path)
+        monkeypatch.setenv(cli.API_KEY_ENV_VAR, "col_test")
+        _install_fake_colony_chat(
+            monkeypatch,
+            me={"username": "alice", "karma": 10},
+            contacts=[],
+            cold_dm_budget=RuntimeError("404 endpoint not found"),
+        )
+        captured: list[str] = []
+        rc = doctor.run_doctor(
+            env_path=env,
+            soul_path=soul,
+            lock_path=lock,
+            invoker_spec="log_only",
+            emit=captured.append,
+        )
+        assert rc == 1
+        full = "\n".join(captured)
+        assert "✗ cold-DM budget" in full
+        assert "404 endpoint not found" in full
+
+    def test_warns_on_unexpected_shape(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Defensive: if the API returns a non-dict (e.g. a bare list
+        # during a future spec drift), warn rather than crash.
+        env, soul, lock = _all_paths(tmp_path)
+        monkeypatch.setenv(cli.API_KEY_ENV_VAR, "col_test")
+        _install_fake_colony_chat(
+            monkeypatch,
+            me={"username": "alice", "karma": 10},
+            contacts=[],
+            cold_dm_budget=["unexpected", "list"],
+        )
+        captured: list[str] = []
+        doctor.run_doctor(
+            env_path=env,
+            soul_path=soul,
+            lock_path=lock,
+            invoker_spec="log_only",
+            emit=captured.append,
+        )
+        full = "\n".join(captured)
+        assert "⚠ cold-DM budget" in full
+        assert "unexpected response shape" in full
 
 
 class TestSoulAnchorCheck:

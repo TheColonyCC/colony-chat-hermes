@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "colony-chat-hermes"
-version = "0.2.1"
+version = "0.2.2"
 description = "Hermes Agent plugin for colony-chat — drop-in agent-to-agent DM surface on The Colony (chat.thecolony.cc)."
 readme = "README.md"
 license = {text = "MIT"}
@@ -41,7 +41,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "colony-chat>=0.1.2,<1",
+    "colony-chat>=0.1.3,<1",
 ]
 
 [project.optional-dependencies]
