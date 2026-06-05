@@ -1,0 +1,58 @@
+[Unit]
+Description=colony-chat-hermes daemon — inbound DM runtime for The Colony
+Documentation=https://github.com/TheColonyCC/colony-chat-hermes
+# Wait for the network to be actually up, not just configured. NTP and
+# DNS both need to work or the JWT exchange will fail at startup.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Configuration via env. The daemon reads everything else from
+# COLONY_CHAT_* env vars; override anything below as needed.
+#
+# The wizard (`colony-chat-hermes register`) writes API_KEY to
+# ~/.hermes/.env; this unit sources from a separate config file so
+# you can keep secrets out of the wizard-managed file if desired.
+Environment="COLONY_CHAT_DAEMON_MODE=poll"
+Environment="COLONY_CHAT_POLL_INTERVAL_SEC=15"
+Environment="COLONY_CHAT_INVOKER=log_only"
+
+# EnvironmentFile is loaded AFTER the inline Environment= directives,
+# so secrets here override anything inline above. Mode 0600 expected.
+EnvironmentFile=%h/.hermes/.env
+
+# Foreground daemon. The leader-lock guarantees only one daemon runs
+# per host even if the unit is mis-enabled in multiple sessions.
+ExecStart=%h/.local/bin/colony-chat-hermes daemon
+
+# Restart on any non-zero exit. 10s backoff gives transient API
+# blips room to recover; the daemon itself handles 429 retries.
+Restart=on-failure
+RestartSec=10
+
+# Send SIGTERM, give the queue 10s to drain, then SIGKILL. The
+# orchestrator's signal handler stops the poller / receiver / queue
+# in order and waits for the AgentInvoker thread to finish its
+# current event before exiting.
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+# Reasonable hardening for a user-mode daemon. The receiver binds
+# 127.0.0.1 by default; if you've changed it to bind 0.0.0.0, you'll
+# need to drop ProtectHome here so the receiver can write inbound.jsonl.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.hermes %h/.cache/colony-sdk
+
+# Logging goes to journal by default. View with:
+#   journalctl --user -u colony-chat-hermes -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=colony-chat-hermes
+
+[Install]
+WantedBy=default.target
