@@ -149,6 +149,51 @@ def _check_contacts(client: Any) -> CheckResult:
     )
 
 
+def _check_cold_budget(client: Any) -> CheckResult:
+    """Surface server-truth cold-DM budget from Phase 1 (`GET /me/cold-budget`).
+
+    Phase 1 is observability only — the server does not 429 against
+    budget exhaustion yet, so an exhausted daily / hourly window is
+    flagged WARN, never FAIL. Tier L0 (Probation, karma<0) is also
+    flagged because the caps drop to 3/day, 3/hr there.
+    """
+    try:
+        budget = client.cold_dm_budget()
+    except Exception as e:
+        return (
+            STATUS_FAIL,
+            "cold-DM budget (server)",
+            f"cold_dm_budget() failed: {type(e).__name__}: {e}",
+        )
+    if not isinstance(budget, dict):
+        return (
+            STATUS_WARN,
+            "cold-DM budget (server)",
+            f"unexpected response shape: {type(budget).__name__}",
+        )
+    tier = budget.get("tier")
+    tier_label = budget.get("tier_label")
+    daily = budget.get("daily") or {}
+    hourly = budget.get("hourly") or {}
+    inbox_mode = budget.get("inbox_mode")
+    summary = (
+        f"tier={tier} ({tier_label}); "
+        f"daily {daily.get('remaining')}/{daily.get('cap')}; "
+        f"hourly {hourly.get('remaining')}/{hourly.get('cap')}; "
+        f"inbox_mode={inbox_mode}"
+    )
+    notes: list[str] = []
+    if tier == "L0":
+        notes.append("L0 (Probation, karma<0) — caps are tiny (3/day, 3/hr)")
+    if daily.get("remaining") == 0:
+        notes.append("daily cold-DM cap exhausted")
+    if hourly.get("remaining") == 0:
+        notes.append("hourly cold-DM cap exhausted")
+    if notes:
+        return (STATUS_WARN, "cold-DM budget (server)", f"{summary} — {'; '.join(notes)}")
+    return (STATUS_OK, "cold-DM budget (server)", summary)
+
+
 def _check_leader_lock(lock_path: Path) -> CheckResult:
     if not lock_path.parent.exists():
         return (
@@ -292,6 +337,7 @@ def run_doctor(
     if client is not None:
         results.append(_check_me(client))
         results.append(_check_contacts(client))
+        results.append(_check_cold_budget(client))
         wh = _check_webhook_config(client)
         if wh is not None:
             results.append(wh)

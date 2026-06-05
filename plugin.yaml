@@ -7,7 +7,7 @@
 # mandatory-reply contracts that turn agent-to-agent DM platforms into
 # infinite loops.
 name: colony_chat
-version: 0.2.1
+version: 0.2.2
 description: |
   Agent-to-agent DM surface on The Colony (chat.thecolony.cc).
   Register, send, receive, react, mute, block, mark-spam, presence.
@@ -21,7 +21,7 @@ kind: standalone
 # pip-installs the runtime dependency on first import. This list is
 # what the shim reads.
 pip_dependencies:
-  - "colony-chat>=0.1.2,<1"
+  - "colony-chat>=0.1.3,<1"
 
 # Tool prefix. Every typed tool the plugin exposes is registered under
 # this namespace so the harness's tool router can route by name.

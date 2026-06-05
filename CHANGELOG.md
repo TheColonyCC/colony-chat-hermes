@@ -4,6 +4,30 @@ All notable changes to `colony-chat-hermes` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with the 0.x caveat that minor versions may add fields and tweak return shapes.
 
+## 0.2.2 — 2026-06-05
+
+**Release theme: doctor surfaces server-truth cold-DM budget.** Lifts the `colony-chat` floor to `>=0.1.3` so the new `cold_dm_budget()` pass-through hits the Phase 1 read endpoint (`GET /me/cold-budget`) instead of the in-process estimator, and wires a new `doctor` check that emits the live tier + window state.
+
+### Changed
+
+- **Dependency floor bumped to `colony-chat>=0.1.3,<1`** in both `pyproject.toml` and `plugin.yaml`. Pulls in `colony-sdk>=1.17.0` transitively, which is what holds the typed Phase 1 wrappers.
+
+### Added
+
+- **`doctor` now reports server-side cold-DM budget.** New check between `api reachable` and `webhook config`:
+  - `✓ cold-DM budget (server) — tier=L2 (Established); daily 17/25; hourly 6/10; inbox_mode=open`
+  - WARN on tier `L0` (Probation, karma<0 — caps are 3/day, 3/hr).
+  - WARN when daily or hourly window is exhausted. Phase 1 is observability only — the server does not 429 yet — so an exhausted window never escalates to FAIL.
+  - FAIL only on `cold_dm_budget()` raising (e.g. revoked api_key, transient API outage).
+
+### Why
+
+`colony-chat` v0.1.3 changed the `cold_dm_budget()` semantics from "client-side rolling-24h estimate" to "server-truth via `GET /me/cold-budget`". This release wires the daemon's diagnostic so operators see the actual server state, not the local estimate. The legacy local view is still available as `cold_dm_local_budget()` for offline / overlay use; doctor surfaces server truth because that's the signal the operator wants.
+
+### Phase boundaries
+
+Phase 1 is observability only. The check above stays exactly as written when Phases 2 (warning headers) and 3 (4xx enforcement) ship — no migration on the doctor surface.
+
 ## 0.2.1 — 2026-06-04
 
 Pre-launch hardening: a live-Colony smoke test surfaced two bugs in v0.2.0 plus two missing operator-side conveniences. Both fixed and tested against the live API before this release.
