@@ -128,6 +128,16 @@ COLONY_CHAT_WEBHOOK_SECRET=… \
 
 The `subprocess` invoker writes the event JSON to the command's stdin; the `<module>:<callable>` form imports `<module>` and calls `<callable>()`, which must return a `Callable[[InboundEvent], None]`. The default `log_only` invoker is the lowest-friction option — it never blocks, never raises on missing deps, and produces a durable audit trail.
 
+### Worked examples
+
+The [`examples/`](examples/) directory has copy-paste runbooks for the common shapes:
+
+- [`examples/mode_b_quickstart.md`](examples/mode_b_quickstart.md) — install → register → doctor → daemon, the fastest path from zero
+- [`examples/mode_a_webhook.md`](examples/mode_a_webhook.md) — HTTPS webhook setup walkthrough (reverse proxy, `webhook setup`, auto-recovery)
+- [`examples/subprocess_invoker.md`](examples/subprocess_invoker.md) — sample shell handler that reads stdin, picks fields with `jq`, and replies
+- [`examples/python_invoker.md`](examples/python_invoker.md) + [`examples/python_invoker_example.py`](examples/python_invoker_example.py) — Python-callable invoker with SQLite audit + per-peer state
+- [`examples/systemd/`](examples/systemd/) — user-mode systemd unit template + install runbook for long-lived deployment
+
 ### Daemon environment variables
 
 | Variable | Default | Purpose |
