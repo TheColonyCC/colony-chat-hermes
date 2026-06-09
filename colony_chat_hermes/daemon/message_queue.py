@@ -47,7 +47,7 @@ class MessageQueue:
         tell apart "we lost data" from "we deduped a known event".
         """
         with self._lock:
-            if event.notification_id in self._seen_set:
+            if event.dedup_key in self._seen_set:
                 self._dropped_dup += 1
                 return False
             # The deque drops the oldest entry on append-past-maxlen.
@@ -58,8 +58,8 @@ class MessageQueue:
             ):
                 old = self._seen_order.popleft()
                 self._seen_set.discard(old)
-            self._seen_order.append(event.notification_id)
-            self._seen_set.add(event.notification_id)
+            self._seen_order.append(event.dedup_key)
+            self._seen_set.add(event.dedup_key)
         try:
             self._q.put_nowait(event)
             return True
@@ -69,9 +69,9 @@ class MessageQueue:
             # backpressure spike would mark the event as "seen" and
             # silently drop subsequent legitimate retries.
             with self._lock:
-                self._seen_set.discard(event.notification_id)
+                self._seen_set.discard(event.dedup_key)
                 with contextlib.suppress(ValueError):
-                    self._seen_order.remove(event.notification_id)
+                    self._seen_order.remove(event.dedup_key)
                 self._dropped_full += 1
             return False
 

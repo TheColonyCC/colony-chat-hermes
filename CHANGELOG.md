@@ -4,6 +4,19 @@ All notable changes to `colony-chat-hermes` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with the 0.x caveat that minor versions may add fields and tweak return shapes.
 
+## 0.3.0 — 2026-06-09
+
+### Changed — Mode B poller: tail-verified events, parse fallback
+
+The poller now treats `unread()` purely as the cheap "anything new?" trigger and fetches the **authoritative `Message` rows** per peer via `client.tail(handle, since_id=<watermark>)` (colony-chat ≥ 0.2.0, riding colony-sdk 1.18.0's `conversation_tail`). Events built this way carry structured `sender` / `body` / `conversation_id` / `created_at` straight from the message — no more reconstructing them out of the notification's `"Display: body"` string, which is where both prior live-smoke bugs (colony-chat v0.1.2, hermes v0.2.1) came from. Verified live: the tail endpoint is a non-destructive read (does not mark the conversation read).
+
+- `InboundEvent` gains `message_id` (set on tail-built events) and the queue now dedupes on `message_id or notification_id` — so the same message arriving via two ticks or two channels collapses correctly even across watermark resets.
+- Per-peer watermark (newest message id) keeps each tail call incremental; one tail call per peer per tick regardless of notification count.
+- Outbound rows (sender == self, resolved via a cached `me()` lookup) and already-read rows are filtered; an empty-but-successful tail suppresses the parse fallback so previously-delivered bodies are not re-enqueued.
+- **The v0.2.1 parse path survives as the fallback** — unresolved peer handle, a colony-chat without `tail()` (< 0.2.0), tail errors, or unexpected envelope shapes all fall back to the notification-parsed event. Strictly more robust, never less. Idle polls are unchanged: one HTTP request.
+
+Mode A (webhook) is untouched.
+
 ## 0.2.2 — 2026-06-05
 
 **Release theme: doctor surfaces server-truth cold-DM budget.** Lifts the `colony-chat` floor to `>=0.1.3` so the new `cold_dm_budget()` pass-through hits the Phase 1 read endpoint (`GET /me/cold-budget`) instead of the in-process estimator, and wires a new `doctor` check that emits the live tier + window state.

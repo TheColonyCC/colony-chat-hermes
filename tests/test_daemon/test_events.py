@@ -173,3 +173,55 @@ class TestToJson:
         assert parsed["from_display"] == "Alice"
         assert parsed["body"] == "hi"
         assert parsed["source"] == "poller"
+
+
+class TestFromMessage:
+    """v0.3.0 — events built from structured tail Message rows."""
+
+    def test_builds_authoritative_event(self) -> None:
+        event = InboundEvent.from_message(
+            {
+                "id": "m1",
+                "body": "hello: with colons",
+                "created_at": "2026-06-09T12:00:00Z",
+                "conversation_id": "c1",
+                "sender": {"username": "alice", "display_name": "Alice"},
+            },
+            peer_handle="alice",
+            source="poller",
+        )
+        assert event is not None
+        assert event.message_id == "m1"
+        assert event.dedup_key == "m1"
+        assert event.body == "hello: with colons"
+        assert event.from_handle == "alice"
+        assert event.from_display == "Alice"
+        assert event.conversation_id == "c1"
+
+    def test_falls_back_to_peer_handle_and_conv(self) -> None:
+        event = InboundEvent.from_message(
+            {"id": "m1", "body": "x"},
+            peer_handle="bob",
+            source="poller",
+            conversation_id_fallback="c9",
+        )
+        assert event is not None
+        assert event.from_handle == "bob"
+        assert event.conversation_id == "c9"
+
+    def test_rejects_malformed(self) -> None:
+        assert InboundEvent.from_message("junk", peer_handle="a", source="poller") is None
+        no_id = InboundEvent.from_message({"body": "no id"}, peer_handle="a", source="poller")
+        assert no_id is None
+
+    def test_dedup_key_prefers_message_id(self) -> None:
+        parsed = InboundEvent(
+            notification_id="n1",
+            from_handle="",
+            from_display="",
+            body="",
+            conversation_id="",
+            ts="",
+            source="poller",
+        )
+        assert parsed.dedup_key == "n1"
