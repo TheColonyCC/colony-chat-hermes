@@ -53,10 +53,55 @@ class InboundEvent:
     conversation_id: str
     ts: str
     source: EventSource
+    message_id: str = ""
     raw: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def dedup_key(self) -> str:
+        """Queue dedup key — the real message id when known, else the
+        notification id. Tail-verified events carry ``message_id``;
+        parse-fallback and webhook events usually don't.
+        """
+        return self.message_id or self.notification_id
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"), default=str)
+
+    @classmethod
+    def from_message(
+        cls,
+        message: Any,
+        *,
+        peer_handle: str,
+        source: EventSource,
+        conversation_id_fallback: str = "",
+    ) -> InboundEvent | None:
+        """Build from a structured ``Message`` dict (the tail endpoint).
+
+        Unlike :meth:`from_notification` there is nothing to parse —
+        the message carries structured ``sender`` / ``body`` /
+        ``conversation_id`` / ``created_at`` fields, so the event is
+        authoritative rather than reconstructed. Returns ``None`` for
+        malformed payloads.
+        """
+        if not isinstance(message, dict):
+            return None
+        msg_id = message.get("id")
+        if not msg_id:
+            return None
+        sender = message.get("sender")
+        sender = sender if isinstance(sender, dict) else {}
+        return cls(
+            notification_id=str(msg_id),
+            from_handle=str(sender.get("username") or peer_handle),
+            from_display=str(sender.get("display_name") or ""),
+            body=str(message.get("body") or ""),
+            conversation_id=str(message.get("conversation_id") or conversation_id_fallback),
+            ts=str(message.get("created_at") or ""),
+            source=source,
+            message_id=str(msg_id),
+            raw=message,
+        )
 
     @classmethod
     def from_notification(
