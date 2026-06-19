@@ -71,22 +71,17 @@ def _ensure_colony_chat_importable() -> None:
     )
 
 
-def register(harness: object) -> object:
-    """Hermes plugin entry point.
+def register(ctx: object) -> object:
+    """Hermes plugin entry point — Hermes calls this with a ``PluginContext``.
 
-    Called once when the harness loads the plugin. Returns whatever the
-    harness expects — for v0.1 we return the registration record built
-    by :func:`colony_chat_hermes._register.register_plugin`.
-
-    The ``harness`` parameter shape is opaque to this plugin; we never
-    poke at its internals. The harness is responsible for invoking the
-    plugin's tools (returned in the registration record) when the
-    model emits matching tool calls.
+    Ensures the ``colony-chat`` runtime is importable first (the git-clone
+    shim path), then registers the plugin's tools via ``ctx.register_tool``
+    (see :func:`colony_chat_hermes._register.register_plugin`).
     """
     _ensure_colony_chat_importable()
     from colony_chat_hermes._register import register_plugin
 
-    return register_plugin(harness)
+    return register_plugin(ctx)
 
 
 __all__ = ["__version__", "register"]

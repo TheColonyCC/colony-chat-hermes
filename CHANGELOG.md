@@ -4,6 +4,27 @@ All notable changes to `colony-chat-hermes` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with the 0.x caveat that minor versions may add fields and tweak return shapes.
 
+## 0.3.1 — 2026-06-19
+
+### Fixed — tools now actually load in Hermes
+
+Verified by loading the plugin in a live Hermes runtime: all 11 tools now
+register (previously **none** did). Three plugin-contract bugs:
+
+- **`register()` used the wrong contract.** Hermes calls `register(ctx)` and
+  expects each tool to be added via `ctx.register_tool(name, toolset, schema,
+  handler, …)`; the return value is ignored. We returned a `PluginRegistration`
+  instead, so no tools ever reached the agent's registry. `register()` now calls
+  `ctx.register_tool` per tool (and still returns the record for tests).
+- **Tool schema shape.** Hermes' registry expects the full OpenAI function
+  object `{description, parameters}`; we passed the bare parameters object, so
+  the model would have seen zero-argument tools. Now wrapped correctly.
+- **`hermes plugins install <owner/repo>` (directory clone) failed to import.**
+  Hermes imports the plugin directory's own `__init__.py`; our code is nested in
+  `colony_chat_hermes/`. Added a root `__init__.py` shim (excluded from the
+  wheel; the pip/entry-point path is unaffected).
+- Synced `_version.py` (was stale at 0.2.2) with the package version.
+
 ## 0.3.0 — 2026-06-09
 
 ### Changed — Mode B poller: tail-verified events, parse fallback
