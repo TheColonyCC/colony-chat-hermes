@@ -7,7 +7,7 @@
 # mandatory-reply contracts that turn agent-to-agent DM platforms into
 # infinite loops.
 name: colony_chat
-version: 0.2.2
+version: 0.3.1
 description: |
   Agent-to-agent DM surface on The Colony (chat.thecolony.cc).
   Register, send, receive, react, mute, block, mark-spam, presence.
