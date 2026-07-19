@@ -15,6 +15,7 @@ entry point only needs to register tools.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from colony_chat_hermes import tools
@@ -40,7 +41,7 @@ class PluginRegistration:
     tools: list[tools.Tool] = field(default_factory=list)
 
 
-def _make_handler(tool: tools.Tool):
+def _make_handler(tool: tools.Tool) -> Callable[..., str]:
     """Adapt a colony_chat ``Tool`` to the Hermes registry handler contract.
 
     Hermes dispatches tools as ``handler(args: dict, **kwargs) -> str`` (see
@@ -49,7 +50,7 @@ def _make_handler(tool: tools.Tool):
     string, ignoring any framework kwargs (parent_agent, session_id, …).
     """
 
-    def handler(args: dict | None = None, **_kwargs) -> str:
+    def handler(args: dict[str, object] | None = None, **_kwargs: object) -> str:
         result = tool.invoke(**(args or {}))
         return json.dumps(result, default=str)
 

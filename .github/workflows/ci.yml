@@ -26,7 +26,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
-      - run: mypy colony_chat_hermes
+      - run: mypy -p colony_chat_hermes
 
   test:
     runs-on: ubuntu-latest

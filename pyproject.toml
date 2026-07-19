@@ -95,6 +95,12 @@ addopts = "-ra --strict-markers"
 
 [tool.mypy]
 python_version = "3.10"
+# The repo root carries an __init__.py — the Hermes git-clone entry shim, which is
+# load-bearing for `hermes plugins install <owner/repo>` and excluded from the wheel.
+# Without explicit_package_bases, mypy walks up from the package, sees that file, and
+# treats the checkout directory itself as a package — whose name contains hyphens and so
+# is not a valid identifier. It then exits 2 BEFORE checking anything.
+explicit_package_bases = true
 strict = true
 warn_return_any = true
 warn_unused_ignores = true
